@@ -21,7 +21,8 @@ class SerialReaderProtocolRaw(Protocol):
 class SerialReaderProtocolLine(LineReader):
     tk_listener = None
     TERMINATOR = b'\r\n'
-
+    to_recive = 0
+    recived = []
     def connection_made(self, transport):
         """Called when reader thread is started"""
         if self.tk_listener is None:
@@ -30,9 +31,16 @@ class SerialReaderProtocolLine(LineReader):
         print("Connected, ready to receive data...")
 
     def handle_line(self, line):
-        """New line waiting to be processed"""
-        # Execute our callback in tk
-        self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+line)
+        if self.to_recive ==0:
+            self.to_recive = int(line)
+        else:
+            """New line waiting to be processed"""
+            # Execute our callback in tk
+            self.recived.append(line.strip())
+            self.to_recive -=1
+        #if we jsut fininshed reciving a mesage, send it up to be read
+        if self.to_recive ==0:
+            self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+" ".join(self.recived))
 
 
 class MainFrame(tk.Frame):
@@ -59,7 +67,14 @@ class SendingBox(tk.Entry):
         self.mainFrame= mainFrame
 
     def send(self, data):
-        self.port.write(self.get().encode("utf-8")+b"\r\n")
+        message = self.get()
+        messagebytes = message.encode("utf-8")
+        frame_size = 14
+        num_frames = (len(messagebytes)/frame_size).__ceil__()
+        self.port.write(str(num_frames).encode("utf-8")+b"\r\n")
+        for i in range(num_frames):
+            index = i*frame_size
+            self.port.write(messagebytes[index:index+frame_size]+b"\r\n")
         self.mainFrame.on_data("You> "+self.get())
         self.delete(0, 'end')
 if __name__ == '__main__':
