@@ -31,6 +31,7 @@ class SerialReaderProtocolLine(LineReader):
         print("Connected, ready to receive data...")
 
     def handle_line(self, line):
+        print(line)
         if self.to_recive ==0:
             self.to_recive = int(line)
         else:
@@ -41,6 +42,7 @@ class SerialReaderProtocolLine(LineReader):
         #if we jsut fininshed reciving a mesage, send it up to be read
         if self.to_recive ==0:
             self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+"".join(self.recived))
+            self.recived = []
 
 
 class MainFrame(tk.Frame):
