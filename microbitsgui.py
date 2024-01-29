@@ -32,7 +32,7 @@ class SerialReaderProtocolLine(LineReader):
     def handle_line(self, line):
         """New line waiting to be processed"""
         # Execute our callback in tk
-        self.tk_listener.after(0, self.tk_listener.on_data, "Others>"+line)
+        self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+line)
 
 
 class MainFrame(tk.Frame):
