@@ -32,7 +32,7 @@ class SerialReaderProtocolLine(LineReader):
     def handle_line(self, line):
         """New line waiting to be processed"""
         # Execute our callback in tk
-        self.tk_listener.after(0, self.tk_listener.on_data, line)
+        self.tk_listener.after(0, self.tk_listener.on_data, "Others>"+line)
 
 
 class MainFrame(tk.Frame):
@@ -46,20 +46,21 @@ class MainFrame(tk.Frame):
         self.grid(sticky="NSEW")
 
     def on_data(self, data):
-        print("Called from tk Thread:", data)
         self.listbox.insert(tk.END, data)
         self.listbox.see("end")
 
 class SendingBox(tk.Entry):
 
-    def __init__(self,port:Serial, *args, **kwargs):
+    def __init__(self,port:Serial,mainFrame:MainFrame, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bind("<Return>",self.send)
         self.port = port
         self.grid(sticky="NSEW")
+        self.mainFrame= mainFrame
 
     def send(self, data):
         self.port.write(self.get().encode("utf-8")+b"\r\n")
+        self.mainFrame.on_data("You> "+self.get())
         self.delete(0, 'end')
 if __name__ == '__main__':
     app = tk.Tk()
@@ -70,7 +71,7 @@ if __name__ == '__main__':
     SerialReaderProtocolLine.tk_listener = main_frame
     # Initiate serial port
     serial_port = get_micro()
-    box = SendingBox(serial_port)
+    box = SendingBox(serial_port,main_frame)
     # Initiate ReaderThread
     reader = ReaderThread(serial_port, SerialReaderProtocolLine)
     # Start reader
