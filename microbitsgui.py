@@ -31,18 +31,20 @@ class SerialReaderProtocolLine(LineReader):
         print("Connected, ready to receive data...")
 
     def handle_line(self, line):
-        print(line)
-        if self.to_recive ==0:
-            self.to_recive = int(line)
-        else:
-            """New line waiting to be processed"""
-            # Execute our callback in tk
-            self.recived.append(line.strip().replace("¬", " "))
-            self.to_recive -=1
-        #if we jsut fininshed reciving a mesage, send it up to be read
-        if self.to_recive ==0:
-            self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+"".join(self.recived))
-            self.recived = []
+        try:
+            if self.to_recive ==0:
+                self.to_recive = int(line)
+            else:
+                """New line waiting to be processed"""
+                # Execute our callback in tk
+                self.recived.append(line.strip().replace("¬", " "))
+                self.to_recive -=1
+            #if we jsut fininshed reciving a mesage, send it up to be read
+            if self.to_recive ==0:
+                self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+"".join(self.recived))
+                self.recived = []
+        except ValueError as e:
+            print("error resigning this message", e)
 
 
 class MainFrame(tk.Frame):
