@@ -36,11 +36,11 @@ class SerialReaderProtocolLine(LineReader):
         else:
             """New line waiting to be processed"""
             # Execute our callback in tk
-            self.recived.append(line.strip())
+            self.recived.append(line.strip().replace("¬", " "))
             self.to_recive -=1
         #if we jsut fininshed reciving a mesage, send it up to be read
         if self.to_recive ==0:
-            self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+" ".join(self.recived))
+            self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+"".join(self.recived))
 
 
 class MainFrame(tk.Frame):
@@ -68,7 +68,7 @@ class SendingBox(tk.Entry):
 
     def send(self, data):
         message = self.get()
-        messagebytes = message.encode("utf-8")
+        messagebytes = message.replace(" ", "¬").encode("utf-8")
         frame_size = 14
         num_frames = (len(messagebytes)/frame_size).__ceil__()
         self.port.write(str(num_frames).encode("utf-8")+b"\r\n")
