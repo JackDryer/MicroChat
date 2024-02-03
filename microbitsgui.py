@@ -18,7 +18,6 @@ class SerialReaderProtocolRaw(Protocol):
 
     def data_received(self, data):
         """Called with snippets received from the serial port"""
-        print(data)
         self.tk_listener.after(0, self.tk_listener.on_data, data.decode())
 
 
@@ -45,7 +44,6 @@ class SerialReaderProtocolLine(LineReader):
                 self.to_receive -=1
             #if we jsut fininshed reciving a mesage, send it up to be read
             if self.to_receive ==0:
-                print(self.received)
                 self.handle_message("".join(self.received))
                 self.received = []
         except ValueError as e:
@@ -83,7 +81,6 @@ class SendingBox(tk.Entry):
         message_bytes = message.replace(" ", "¬").encode("utf-8")
         frame_size = 14
         num_frames = (len(message_bytes)/frame_size).__ceil__()
-        print(message_bytes)
         self.port.write(str(num_frames).encode("utf-8")+b"\r\n")
         for i in range(num_frames):
             index = i*frame_size
