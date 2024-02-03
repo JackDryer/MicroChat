@@ -21,8 +21,8 @@ class SerialReaderProtocolRaw(Protocol):
 class SerialReaderProtocolLine(LineReader):
     tk_listener = None
     TERMINATOR = b'\r\n'
-    to_recive = 0
-    recived = []
+    to_receive = 0
+    received = []
     def connection_made(self, transport):
         """Called when reader thread is started"""
         if self.tk_listener is None:
@@ -32,17 +32,17 @@ class SerialReaderProtocolLine(LineReader):
 
     def handle_line(self, line):
         try:
-            if self.to_recive ==0:
-                self.to_recive = int(line)
+            if self.to_receive ==0:
+                self.to_receive = int(line)
             else:
                 """New line waiting to be processed"""
                 # Execute our callback in tk
-                self.recived.append(line.strip().replace("¬", " "))
-                self.to_recive -=1
+                self.received.append(line.strip().replace("¬", " "))
+                self.to_receive -=1
             #if we jsut fininshed reciving a mesage, send it up to be read
-            if self.to_recive ==0:
-                self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+"".join(self.recived))
-                self.recived = []
+            if self.to_receive ==0:
+                self.tk_listener.after(0, self.tk_listener.on_data, "Others >"+"".join(self.received))
+                self.received = []
         except ValueError as e:
             print("error resigning this message", e)
 
