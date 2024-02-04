@@ -72,7 +72,7 @@ class SerialReaderProtocolLine(LineReader): #layers 1  and 2
                     # this will trigger many false positives but if we dropped packets we better make sure we dont drop any more
             else:
                 if line[0]=="#": # payload
-                    self.current_packet.append(line)
+                    self.current_packet.append(line[1:])
                     self.distance_into_packet +=1
                 else:
                     try:
