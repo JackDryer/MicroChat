@@ -11,6 +11,17 @@ import json
 from microbitsmodule import get_micro
 
 username = ""
+class CONTROL:
+    MESSAGE_START = "\u0091"
+    MESSAGE_END = "\u0004"
+    HEADER = "\u0001"
+    PAYLOAD = "\u0002"
+    REQUEST = "\u0005"
+    RESPONSE = "\u0006"
+
+    VALID_MESSAGES = {MESSAGE_START,MESSAGE_END,HEADER,PAYLOAD,REQUEST,RESPONSE}
+
+
 class SerialReaderProtocolRaw(Protocol):
     tk_listener = None
 
@@ -22,7 +33,7 @@ class SerialReaderProtocolRaw(Protocol):
 
     def data_received(self, data):
         """Called with snippets received from the serial port"""
-        self.tk_listener.after(0, self.tk_listener.on_data, data.decode())
+        self.tk_listener.after(0, self.tk_listener.on_data, str(data))
  
 LINES_PER_PACKET = 4
 MAX_LINE_LENGTH = 14
@@ -42,69 +53,26 @@ class SerialReaderProtocolLine(LineReader): #layers 1  and 2
     def handle_line(self, line:str): # so this code is out of our control and line will always be a str
         line = line.strip()#so long \r\n
         #print(f"{self.current_packet_num=}")
-        if self.num_packets_to_receive ==0:
-            try:
-                self.num_packets_to_receive = int(line)# int autostrips after testing it, btu id rather strip before
-            except ValueError as e:
-                print("error receiving this message", e)
-            timeout = threading.Thread(daemon= True,target=self.timeout)
-            timeout.start()
-        else:
-            # build a packet, then add it to successful packets, otherwise store its index
-            # if a value is in both succsessfull and failed packets, the fialed one is a false positive
-            #self.received.append(line[2:].replace("¬", " ")) # do we need this really?
-            if self.distance_into_packet ==0:# new packet
-                self.current_packet_num+=1
-                try:
-                    next_packet_number = int(line)
-                    if next_packet_number<0:
-                        #negetive packet numbers are corrections    
-                        self.current_packet_num = -next_packet_number
-                    elif next_packet_number !=self.current_packet_num:
-                        print(f"Oh no, we skipped a packet! {self.current_packet_num =}, {next_packet_number=}")
-                        self.failed_packet_nums.add(self.current_packet_num)
-                        self.current_packet_num = next_packet_number
-                    self.distance_into_packet +=1
-                except ValueError:
-                    #likely dropped a packet
-                    self.failed_packet_nums.add(self.current_packet_num)
-                    print(f"uh oh, dropped packet! {self.current_packet_num=}, {line=}")
-                    # this will trigger many false positives but if we dropped packets we better make sure we dont drop any more
-            else:
-                if line[0]=="#": # payload
-                    self.current_packet.append(line[1:])
-                    self.distance_into_packet +=1
-                else:
-                    try:
-                        next_packet_number = int(line)# if this succeeds then its likely the previous packet was dropped
-                        #we need to flush and reset
-                        print(f"uh oh, dropped packet! {self.current_packet_num=}, {next_packet_number=}")
-                        self.failed_packet_nums.add(self.current_packet_num)
-                        self.current_packet_num = next_packet_number
-                        self.reset_packet()
-                    except ValueError:
-                        print(f"Error reading line {line}")
-                        self.failed_packet_nums.add(self.current_packet_num)
-                        self.distance_into_packet +=1
-
-        if self.distance_into_packet ==LINES_PER_PACKET: #0 index, but this is after incrementing
-            self.successful_packets[self.current_packet_num] = ("".join(self.current_packet))
-            self.successful_packet_nums.add(self.current_packet_num)
-            self.reset_packet()
-            # nice! we just handled a packet, are there any errors left?
-            self.failed_packet_nums.difference_update(self.successful_packet_nums)
-            if not self.error_correcting and self.current_packet_num ==self.num_packets_to_receive: #ok so we just handled "all" packets, are there any errors
-                if self.failed_packet_nums:
-                    self.error_correcting = True
-                    self.num_packets_to_receive = len(self.failed_packet_nums)
-                    print("error receiving packets",self.failed_packet_nums)
-                    print(f"{self.successful_packets=}")
-                else:# yoo no errors
-                    msg = "".join(self.successful_packets[i] for i in sorted(self.successful_packet_nums))
-                    self.handle_message(msg)
-                    self.reset_message()
-            
-                
+        if not line or line[0] not in CONTROL.VALID_MESSAGES: #python is just english
+            self.current_packet.add_failed_line()
+            return
+        if line[0] ==CONTROL.MESSAGE_START:
+                if self.current_message: # 2 mesages at once, BAD!
+                    raise Exception("Tried to handle 2 messages at once")
+                self.current_message = Message(line[1:])
+        elif self.current_message:
+            self.current_message = Message()
+        match line[0]:
+            case CONTROL.HEADER:
+                self.current_message.next_packet(int(line[1:]))
+            case CONTROL.PAYLOAD:
+                self.current_message.add_payload(line[1:])
+            case CONTROL.REQUEST:
+                pass
+            case CONTROL.RESPONSE:
+                self.current_message.add_correction(line[1:])
+        if self.current_message.is_complete:
+            self.handle_message(self.current_message.get_message())
 
     def handle_message(self,message):
         full_message = json.loads(message) #why operate on strings??, as lower levels kina needs it at the moment, im im not sure at this point how that code works ¯\_(ツ)_/¯
@@ -113,29 +81,101 @@ class SerialReaderProtocolLine(LineReader): #layers 1  and 2
             self.tk_listener.after(0, self.tk_listener.on_data, f'(Plaintext){full_message["username"]} >{full_message["message"]}')
         else:
             print("unknown message type received", full_message)
-    def reset_packet(self):
-        self.distance_into_packet = 0
-        self.current_packet = []
+
+class Message:
+    def __init__ (self,num_packets_to_receive = None):
+        timeout = threading.Thread(daemon= True,target=self.timeout)
+        timeout.start()
+        if num_packets_to_receive is None:
+            self.num_packets_to_receive = None # we're gonna time out and then correct 
+        try:
+            self.num_packets_to_receive = int(num_packets_to_receive)
+        except ValueError as e:
+            print("error getting number packets", e)
+            self.num_packets_to_receive = None
+        self.successful_packet_nums = set()
+        self.failed_packet_nums=set()
+        self.successful_packets= {}
+        self.current_packet_num = 0
+        self.current_packet = None
+        self.handing_errors = False
+
+    def next_packet (self,next_packet_number:int):
+        if self.current_packet is not None:
+            print(f"uh oh, dropped packet! {self.current_packet_num=}")
+            self.failed_packet_nums.add(self.current_packet_num)
+        self.current_packet_num+=1
+        if next_packet_number !=self.current_packet_num:
+            print(f"Oh no, we skipped a packet! {self.current_packet_num =}, {next_packet_number=}")
+            self.failed_packet_nums.add(self.current_packet_num)
+            self.current_packet_num = next_packet_number
+
+    def add_payload(self,payload):
+        if self.current_packet is None:
+            self.current_packet_num+=1
+            self.failed_packet_nums.add(self.current_packet_num)
+            return
+        self.current_packet.add_payload(payload)
+        if self.current_packet.is_complete:
+            self.successful_packets[self.current_packet_num] = self.current_packet.get_payload()
+            self.current_packet = None
+            self.handle_errors_if_required()
     
+    def handle_errors_if_required(self):
+        if self.required_to_handle_errors:
+            self.handle_errors()
+    def handle_errors (self):
+        print(f"should handle{self.failed_packet_nums}")
+    
+    @property
+    def required_to_handle_errors(self):
+        if self.handing_errors:
+            return self.has_errors
+        else: return False
+        self.failed_packet_nums.difference_update(self.successful_packet_nums)
+        return self.error_correcting or self.current_packet_num ==self.num_packets_to_receive
+    
+    @property
+    def has_errors(self):
+        if self.num_packets_to_receive is None:
+            return True
+        return not self.is_complete
+
+    @property
+    def is_complete(self) ->bool:
+        return len(self.successful_packet_nums)!= self.num_packets_to_receive
+    
+    def get_message(self):
+        return "".join(self.successful_packets[i] for i in sorted(self.successful_packet_nums))
+
     def timeout(self):
         time.sleep(0.5)
-        if len(self.successful_packet_nums)!= self.num_packets_to_receive:
+        if not self.is_complete:
             self.failed_packet_nums = set(range(1,self.num_packets_to_receive+1)).difference(self.successful_packet_nums)
             print("Timed out!")
             print("error receiving packets",self.failed_packet_nums)
             print(f"{self.successful_packets=}")
-            self.reset_packet()
+            self.handle_errors()
 
-    def reset_message(self):
-        self.num_packets_to_receive = 0
-        self.successful_packet_nums = set()
-        self.failed_packet_nums=set()
-        self.successful_packets= {}
-        self.distance_into_packet = 0
-        self.current_packet_num = 0
-        self.current_packet = []
-        self.error_correcting = False
+            if : #ok so we just handled "all" packets, are there any errors
+                if self.failed_packet_nums:
+                    self.error_correcting = True
+                    self.num_packets_to_receive = len(self.failed_packet_nums)
+                    print("error receiving packets",self.failed_packet_nums)
+                    print(f"{self.successful_packets=}")
 
+        
+class Packet:
+    def __init__(self, number:int):
+        self.number = number
+        self.LINES = []
+    def add_payload(self,payload):
+        self.LINES.append([payload])
+    @property
+    def is_complete(self) ->bool:
+        return len(self.LINES) ==LINES_PER_PACKET
+    def get_payload(self):
+        return "".join(self.current_packet)
 class MainFrame(tk.Frame):
 
     def __init__(self, *args, **kwargs):
@@ -190,12 +230,12 @@ if __name__ == '__main__':
     app.rowconfigure(1,weight=1)
     main_frame = MainFrame()
     # Set listener to our reader
-    SerialReaderProtocolLine.tk_listener = main_frame
+    SerialReaderProtocolRaw.tk_listener = main_frame
     # Initiate serial port
     serial_port = get_micro()
     box = SendingBox(serial_port,main_frame,username)
     # Initiate ReaderThread
-    reader = ReaderThread(serial_port, SerialReaderProtocolLine)
+    reader = ReaderThread(serial_port, SerialReaderProtocolRaw)
     #build actual app
     username.grid(sticky="NSEW")
     main_frame.grid(sticky="NSEW",columnspan=2)
