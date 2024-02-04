@@ -3,6 +3,9 @@ import tkinter as tk
 from serial import Serial
 from serial.threaded import ReaderThread, Protocol, LineReader
 
+import threading
+import time
+
 import json
 
 from microbitsmodule import get_micro
@@ -38,11 +41,14 @@ class SerialReaderProtocolLine(LineReader): #layers 1  and 2
 
     def handle_line(self, line:str): # so this code is out of our control and line will always be a str
         line = line.strip()#so long \r\n
-        if self.packets_to_receive ==0:
+        #print(f"{self.current_packet_num=}")
+        if self.num_packets_to_receive ==0:
             try:
-                self.packets_to_receive = int(line)# int autostrips after testing it, btu id rather strip before
+                self.num_packets_to_receive = int(line)# int autostrips after testing it, btu id rather strip before
             except ValueError as e:
                 print("error receiving this message", e)
+            timeout = threading.Thread(daemon= True,target=self.timeout)
+            timeout.start()
         else:
             # build a packet, then add it to successful packets, otherwise store its index
             # if a value is in both succsessfull and failed packets, the fialed one is a false positive
@@ -55,37 +61,48 @@ class SerialReaderProtocolLine(LineReader): #layers 1  and 2
                         #negetive packet numbers are corrections    
                         self.current_packet_num = -next_packet_number
                     elif next_packet_number !=self.current_packet_num:
-                        self.failed_packet_nums.append(self.current_packet_num)
-                        self.current_packet_num = self.next_packet_number
+                        print(f"Oh no, we skipped a packet! {self.current_packet_num =}, {next_packet_number=}")
+                        self.failed_packet_nums.add(self.current_packet_num)
+                        self.current_packet_num = next_packet_number
                     self.distance_into_packet +=1
                 except ValueError:
                     #likely dropped a packet
-                    self.failed_packet_nums.append(self.current_packet_num)
+                    self.failed_packet_nums.add(self.current_packet_num)
+                    print(f"uh oh, dropped packet! {self.current_packet_num=}, {line=}")
                     # this will trigger many false positives but if we dropped packets we better make sure we dont drop any more
             else:
-                try:
-                    next_packet_number = int(line)# if this succeeds then its likely the previous packet was dropped
-                    #we need to flush and reset
-                    self.failed_packet_nums.append(self.current_packet_num)
-                    self.current_packet_num = self.next_packet_number
-                    self.reset_packet()
-                except ValueError:
+                if line[0]=="#": # payload
                     self.current_packet.append(line)
                     self.distance_into_packet +=1
-        if self.distance_into_packet ==LINES_PER_PACKET-1: #0 index
+                else:
+                    try:
+                        next_packet_number = int(line)# if this succeeds then its likely the previous packet was dropped
+                        #we need to flush and reset
+                        print(f"uh oh, dropped packet! {self.current_packet_num=}, {next_packet_number=}")
+                        self.failed_packet_nums.add(self.current_packet_num)
+                        self.current_packet_num = next_packet_number
+                        self.reset_packet()
+                    except ValueError:
+                        print(f"Error reading line {line}")
+                        self.failed_packet_nums.add(self.current_packet_num)
+                        self.distance_into_packet +=1
+
+        if self.distance_into_packet ==LINES_PER_PACKET: #0 index, but this is after incrementing
             self.successful_packets[self.current_packet_num] = ("".join(self.current_packet))
             self.successful_packet_nums.add(self.current_packet_num)
             self.reset_packet()
             # nice! we just handled a packet, are there any errors left?
             self.failed_packet_nums.difference_update(self.successful_packet_nums)
-            if not self.error_correcting and self.current_packet_num ==self.packets_to_receive: #ok so we just handled "all" packets, are there any errors
+            if not self.error_correcting and self.current_packet_num ==self.num_packets_to_receive: #ok so we just handled "all" packets, are there any errors
                 if self.failed_packet_nums:
                     self.error_correcting = True
-                    self.packets_to_receive = len(self.failed_packet_nums)
+                    self.num_packets_to_receive = len(self.failed_packet_nums)
+                    print("error receiving packets",self.failed_packet_nums)
+                    print(f"{self.successful_packets=}")
                 else:# yoo no errors
-                    self.handle_message("".join(self.successful_packets[i] for i in sorted(self.successful_packet_nums)))
+                    msg = "".join(self.successful_packets[i] for i in sorted(self.successful_packet_nums))
+                    self.handle_message(msg)
                     self.reset_message()
-            self.packets_to_receive = 0
             
                 
 
@@ -98,12 +115,22 @@ class SerialReaderProtocolLine(LineReader): #layers 1  and 2
             print("unknown message type received", full_message)
     def reset_packet(self):
         self.distance_into_packet = 0
-        self.packet = []
+        self.current_packet = []
+    
+    def timeout(self):
+        time.sleep(0.5)
+        if len(self.successful_packet_nums)!= self.num_packets_to_receive:
+            self.failed_packet_nums = set(range(1,self.num_packets_to_receive+1)).difference(self.successful_packet_nums)
+            print("Timed out!")
+            print("error receiving packets",self.failed_packet_nums)
+            print(f"{self.successful_packets=}")
+            self.reset_packet()
+
     def reset_message(self):
-        self.packets_to_receive = 0
+        self.num_packets_to_receive = 0
         self.successful_packet_nums = set()
         self.failed_packet_nums=set()
-        self.successful_packets: {}
+        self.successful_packets= {}
         self.distance_into_packet = 0
         self.current_packet_num = 0
         self.current_packet = []
@@ -133,7 +160,7 @@ class SendingBox(tk.Entry):
         self.port.write(str(number).encode("utf-8")+b"\r\n")
         for i in range(LINES_PER_PACKET-1):
             index = i*MAX_LINE_LENGTH
-            self.port.write(packet[index:index+MAX_LINE_LENGTH]+b"\r\n")
+            self.port.write(b'#'+packet[index:index+MAX_LINE_LENGTH]+b"\r\n")
     def send_raw(self, message:str):
         #message_bytes = message.replace(" ", "¬").encode("utf-8")
         message_bytes = message.encode("utf-8")
