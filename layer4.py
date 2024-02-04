@@ -87,7 +87,7 @@ class TCP_Handler:
                 self.send_packet(Packet(int(line[1:])+1,"ACK"))
                 self.layer_6.handle_message(self.current_receiving_message.get_message())
                 self.current_receiving_message = None
-            case CONTROL.RESPONSE:
+            case CONTROL.ACK:
                 self.receive_ack(int(line[1:]))
                 
 
@@ -103,10 +103,11 @@ class TCP_Handler:
             for i in range(LINES_PER_PACKET-1):
                 index = i*MAX_LINE_LENGTH
                 self.sending_port.write((CONTROL.PAYLOAD+packet.get_payload()[index:index+MAX_LINE_LENGTH]+"\r\n").encode("utf-8"))
-        self.timeout = threading.Thread(target=self.timeout_send,args=(self.current_sending_packet.number,),daemon=True)
+        self.timeout = threading.Thread(target=self.timeout_send,args=(packet.number,),daemon=True)
     def timeout_send(self,number):
         time.sleep(0.5)
         if self.acknowledged == number: #could be a <= but were aking all packets so not an issue 
+            print("timed out!")
             self.send_packet(self.current_sending_packet)
     def receive_ack(self,number):
         self.acknowledged = number
