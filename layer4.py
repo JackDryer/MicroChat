@@ -1,5 +1,6 @@
 import threading
 import time
+import hashlib
 
 PAYLOAD_FRAMES_PER_PACKET = 3
 MAX_LINE_LENGTH = 14
@@ -8,6 +9,7 @@ class CONTROL:
     MESSAGE_END = "\u0004"
     HEADER = "\u0001"
     PAYLOAD = "\u0002"
+    TRAILER =  "\u0003"
     SYN = "\u0016"
     ACK = "\u0006"
     VALID_MESSAGES = {MESSAGE_END,HEADER,PAYLOAD,SYN,ACK}
@@ -23,9 +25,11 @@ class Received_Message:
         self.current_packet = Packet(next_packet_number)
 
     def add_payload(self,payload):
+        self.current_packet.add_payload(payload)
+    def add_trailer(self,trailer):
         if self.current_packet is None:
             return # ignore it, it'll time out and re-send
-        self.current_packet.add_payload(payload)
+        self.current_packet.checksum = trailer
         if self.current_packet.is_complete:
             self.packets.append(self.current_packet.get_payload())
             self.send_ack(self.current_packet)
@@ -44,6 +48,7 @@ class Packet:
         self.payload = ""
         self.lines = 0 # this should be marked with a trailer, but for now this'll do
         self.type = type
+        self.checksum = ""
     def add_payload(self,payload):
         self.payload += payload
         self.lines+=1
@@ -54,6 +59,8 @@ class Packet:
         return self.payload
     def debug(self):
         return f"{self.type=}, {self.number=}, {self.payload=}"
+    def get_checksum(self) :
+        return hashlib.blake2b(self.payload).hexdigest()[:MAX_LINE_LENGTH]
 
 class TCP_Handler:
     def __init__(self, sending_port,layer_6):
@@ -101,6 +108,7 @@ class TCP_Handler:
             for i in range(PAYLOAD_FRAMES_PER_PACKET):
                 index = i*MAX_LINE_LENGTH
                 self.sending_port.write((CONTROL.PAYLOAD+packet.get_payload()[index:index+MAX_LINE_LENGTH]+"\r\n").encode("utf-8"))
+            self.sending_port.write((CONTROL.TRAILER+packet.get_checksum()+"\r\n").encode("utf-8"))
         self.timeout = threading.Thread(target=self.timeout_send,args=(packet.number,),daemon=True)
         self.timeout.start()
     def timeout_send(self,number):
