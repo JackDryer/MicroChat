@@ -14,7 +14,7 @@ class SerialReaderProtocolLine(LineReader): #layers 1  and 2
     def handle_line(self, line:str): # so this code is out of our control and line will always be a strre'''
         #print(f"{self.current_packet_num=}")
         self.frame_handler.read(line)
-SPACE_CHARACTER = "\u0091"
+SPACE_CHARACTER = "\u0011"
 class Layer2:
     def __init__(self,serial,layer4) -> None:
         self.serial = serial
@@ -27,4 +27,5 @@ class Layer2:
         self.layer4.receive_frame(frame)
     def write(self,frame:str):
         frame = frame.replace(" ",SPACE_CHARACTER)
+        print(frame.encode("utf-8")+b"\r\n")
         self.serial.write(frame.encode("utf-8")+b"\r\n")
