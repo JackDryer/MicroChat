@@ -18,6 +18,7 @@ class CONTROL:
 class Received_Message:
     def __init__ (self,TCP_Handler):
         self.packets =  []
+        self.packet_numbers = set()
         self.current_packet = None
         self.TCP_Handler = TCP_Handler
 
@@ -35,7 +36,9 @@ class Received_Message:
             return # ignore it, it'll time out and re-send
         self.current_packet.checksum = trailer
         if self.current_packet.is_complete:
-            self.packets.append(self.current_packet.get_payload())
+            if self.current_packet.number not in self.packet_numbers:
+                self.packets.append(self.current_packet.get_payload())
+                self.packet_numbers.add(self.current_packet.number)
             self.send_ack(self.current_packet)
             self.current_packet = None
         else:
@@ -95,8 +98,10 @@ class TCP_Handler:
                 self.current_receiving_message.add_trailer(line[1:])
             case CONTROL.MESSAGE_END:
                 self.send_packet(Packet(int(line[1:])+1,"ACK"))
-                self.layer_6.handle_message(self.current_receiving_message.get_message())
-                self.current_receiving_message = None
+                if self.last_received_packet !="END":
+                    self.layer_6.handle_message(self.current_receiving_message.get_message())
+                    self.current_receiving_message = None
+                self.last_received_packet = "END"
             case CONTROL.ACK:
                 self.receive_ack(int(line[1:]))
                 
