@@ -12,7 +12,7 @@ class CONTROL:
     TRAILER =  "\u0003"
     SYN = "\u0016"
     ACK = "\u0006"
-    VALID_MESSAGES = {MESSAGE_END,HEADER,PAYLOAD,SYN,ACK}
+    VALID_MESSAGES = {MESSAGE_END,HEADER,PAYLOAD,TRAILER,SYN,ACK}
 class Received_Message:
     def __init__ (self,TCP_Handler):
         self.packets =  []
@@ -60,7 +60,7 @@ class Packet:
     def debug(self):
         return f"{self.type=}, {self.number=}, {self.payload=}"
     def get_checksum(self) :
-        return hashlib.blake2b(self.payload).hexdigest()[:MAX_LINE_LENGTH]
+        return hashlib.blake2b(self.payload.encode()).hexdigest()[:MAX_LINE_LENGTH]
 
 class TCP_Handler:
     def __init__(self, sending_port,layer_6):
