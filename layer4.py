@@ -21,7 +21,7 @@ class Received_Message:
 
     def next_packet (self,next_packet_number:int):
         if self.current_packet is not None:
-            print(f"uh oh, something broke {self.current_packet.debug()}")
+            print(f"Packet overridden {self.current_packet.debug()}")
         self.current_packet = Packet(next_packet_number)
 
     def add_payload(self,payload):
@@ -34,8 +34,10 @@ class Received_Message:
             self.packets.append(self.current_packet.get_payload())
             self.send_ack(self.current_packet)
             self.current_packet = None
+        else:
+            print("Checksum Failed")
     def send_ack(self,packet):
-        self.TCP_Handler.send_packet(Packet(self.current_packet.number+1,"ACK"))
+        self.TCP_Handler.send_packet(Packet(packet.number+1,"ACK"))
     def add_failed_line():
         pass # it already failed, lets just drop it 
     def get_message(self):
@@ -46,15 +48,13 @@ class Packet:
     def __init__(self, number:int, type = "payload"):
         self.number = number
         self.payload = ""
-        self.lines = 0 # this should be marked with a trailer, but for now this'll do
         self.type = type
         self.checksum = ""
     def add_payload(self,payload):
         self.payload += payload
-        self.lines+=1
     @property
     def is_complete(self) ->bool:
-        return self.lines ==PAYLOAD_FRAMES_PER_PACKET
+        return self.get_checksum()==self.checksum
     def get_payload(self):
         return self.payload
     def debug(self):
