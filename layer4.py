@@ -28,14 +28,14 @@ class Received_Message:
         self.current_packet.add_payload(payload)
         if self.current_packet.is_complete:
             self.packets.append(self.current_packet.get_payload())
-            self.current_packet = None
             self.send_ack(self.current_packet)
+            self.current_packet = None
     def send_ack(self,packet):
-        self.TCP_Handler.send_packet(Packet(self.current_packet.number+1),"ACK")
+        self.TCP_Handler.send_packet(Packet(self.current_packet.number+1,"ACK"))
     def add_failed_line():
         pass # it already failed, lets just drop it 
     def get_message(self):
-        return "".join(self.successful_packets[i] for i in sorted(self.successful_packet_nums))
+        return "".join(self.packets)
 
     def timeout(self):
         time.sleep(0.5)
@@ -58,7 +58,7 @@ class Packet:
         self.lines+=1
     @property
     def is_complete(self) ->bool:
-        return len(self.lines) ==LINES_PER_PACKET
+        return self.lines ==LINES_PER_PACKET-1
     def get_payload(self):
         return self.payload
 
@@ -92,26 +92,28 @@ class TCP_Handler:
                 
 
     def send_packet(self,packet:Packet):
-        if packet.type =="SYN":
-            self.sending_port.write((CONTROL.SYN+str(packet.number)+"\r\n").encode("utf-8"))
-        if packet.type =="ACK":
+        if packet.type =="ACK": # doesn't need a responce
             self.sending_port.write((CONTROL.ACK+str(packet.number)+"\r\n").encode("utf-8"))
-        if packet.type =="END":
+            return
+        elif packet.type =="SYN":
+            self.sending_port.write((CONTROL.SYN+str(packet.number)+"\r\n").encode("utf-8"))
+        elif packet.type =="END":
             self.sending_port.write((CONTROL.MESSAGE_END+str(packet.number)+"\r\n").encode("utf-8"))
-        if packet.type =="payload":
+        elif packet.type =="payload":
             self.sending_port.write((CONTROL.HEADER+str(packet.number)+"\r\n").encode("utf-8"))
             for i in range(LINES_PER_PACKET-1):
                 index = i*MAX_LINE_LENGTH
                 self.sending_port.write((CONTROL.PAYLOAD+packet.get_payload()[index:index+MAX_LINE_LENGTH]+"\r\n").encode("utf-8"))
         self.timeout = threading.Thread(target=self.timeout_send,args=(packet.number,),daemon=True)
+        self.timeout.start()
     def timeout_send(self,number):
         time.sleep(0.5)
         if self.acknowledged == number: #could be a <= but were aking all packets so not an issue 
-            print("timed out!")
+            print(f"timed out! {self.current_sending_packet.type=}, {self.current_sending_packet.number=}, {self.current_sending_packet.payload=}")
             self.send_packet(self.current_sending_packet)
     def receive_ack(self,number):
         self.acknowledged = number
-        packet_size = MAX_LINE_LENGTH*LINES_PER_PACKET
+        packet_size = MAX_LINE_LENGTH*(LINES_PER_PACKET-1)
         index = (self.acknowledged-1)*packet_size # 1 indexed
         payload = self.text_to_send[index:index+packet_size]
         if payload:
