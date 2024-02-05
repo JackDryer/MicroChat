@@ -5,6 +5,7 @@ import hashlib
 PAYLOAD_FRAMES_PER_PACKET = 3
 MAX_LINE_LENGTH = 14
 
+SPACE_CHARACTER = "\u0091"
 class CONTROL:
     MESSAGE_END = "\u0004"
     HEADER = "\u0001"
@@ -35,7 +36,7 @@ class Received_Message:
             self.send_ack(self.current_packet)
             self.current_packet = None
         else:
-            print("Checksum Failed")
+            print(f"Checksum Failed, {self.current_packet.checksum} is not {self.current_packet.get_checksum()}")
     def send_ack(self,packet):
         self.TCP_Handler.send_packet(Packet(packet.number+1,"ACK"))
     def add_failed_line():
@@ -50,13 +51,13 @@ class Packet:
         self.payload = ""
         self.type = type
         self.checksum = ""
-    def add_payload(self,payload):
-        self.payload += payload
+    def add_payload(self,payload:str):
+        self.payload += payload.replace(" ",SPACE_CHARACTER)
     @property
     def is_complete(self) ->bool:
         return self.get_checksum()==self.checksum
     def get_payload(self):
-        return self.payload
+        return self.payload(SPACE_CHARACTER," ")
     def debug(self):
         return f"{self.type=}, {self.number=}, {self.payload=}"
     def get_checksum(self) :
@@ -109,7 +110,7 @@ class TCP_Handler:
             self.sending_port.write((CONTROL.HEADER+str(packet.number)+"\r\n").encode("utf-8"))
             for i in range(PAYLOAD_FRAMES_PER_PACKET):
                 index = i*MAX_LINE_LENGTH
-                self.sending_port.write((CONTROL.PAYLOAD+packet.get_payload()[index:index+MAX_LINE_LENGTH]+"\r\n").encode("utf-8"))
+                self.sending_port.write((CONTROL.PAYLOAD+packet.payload[index:index+MAX_LINE_LENGTH]+"\r\n").encode("utf-8")) # dont use get payload as we dont want spaces
             self.sending_port.write((CONTROL.TRAILER+packet.get_checksum()+"\r\n").encode("utf-8"))
         self.timeout = threading.Thread(target=self.timeout_send,args=(packet.number,),daemon=True)
         self.timeout.start()

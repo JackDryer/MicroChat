@@ -36,7 +36,7 @@ class SerialReaderProtocolLine(LineReader): #layers 1  and 2
     def handle_line(self, line:str): # so this code is out of our control and line will always be a str
         '''this is layer 2 where we receive frames (in this case its lines), 
         we could apply a hamming code here, but in testing errors within frames seem fairly rare'''
-        line = line.strip()#so long \r\n
+        line = line.strip()
         #print(f"{self.current_packet_num=}")
         '''here we are moving up to layer 4'''
         self.tcp_connection.receive_frame(line)
