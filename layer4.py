@@ -19,7 +19,7 @@ class Received_Message:
 
     def next_packet (self,next_packet_number:int):
         if self.current_packet is not None:
-            print(f"uh oh, something broke {self.current_packet_num=}")
+            print(f"uh oh, something broke {self.current_packet.debug()}")
         self.current_packet = Packet(next_packet_number)
 
     def add_payload(self,payload):
@@ -61,6 +61,8 @@ class Packet:
         return self.lines ==LINES_PER_PACKET-1
     def get_payload(self):
         return self.payload
+    def debug(self):
+        return f"{self.type=}, {self.number=}, {self.payload=}"
 
 class TCP_Handler:
     def __init__(self, sending_port,layer_6):
@@ -109,7 +111,7 @@ class TCP_Handler:
     def timeout_send(self,number):
         time.sleep(0.5)
         if self.acknowledged == number: #could be a <= but were aking all packets so not an issue 
-            print(f"timed out! {self.current_sending_packet.type=}, {self.current_sending_packet.number=}, {self.current_sending_packet.payload=}")
+            print(f"timed out! {self.current_sending_packet.debug()}")
             self.send_packet(self.current_sending_packet)
     def receive_ack(self,number):
         self.acknowledged = number
