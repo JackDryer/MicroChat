@@ -1,7 +1,7 @@
 import threading
 import time
 
-LINES_PER_PACKET = 4
+PAYLOAD_FRAMES_PER_PACKET = 3
 MAX_LINE_LENGTH = 14
 
 class CONTROL:
@@ -49,7 +49,7 @@ class Packet:
         self.lines+=1
     @property
     def is_complete(self) ->bool:
-        return self.lines ==LINES_PER_PACKET-1
+        return self.lines ==PAYLOAD_FRAMES_PER_PACKET
     def get_payload(self):
         return self.payload
     def debug(self):
@@ -98,7 +98,7 @@ class TCP_Handler:
             self.sending_port.write((CONTROL.MESSAGE_END+str(packet.number)+"\r\n").encode("utf-8"))
         elif packet.type =="payload":
             self.sending_port.write((CONTROL.HEADER+str(packet.number)+"\r\n").encode("utf-8"))
-            for i in range(LINES_PER_PACKET-1):
+            for i in range(PAYLOAD_FRAMES_PER_PACKET):
                 index = i*MAX_LINE_LENGTH
                 self.sending_port.write((CONTROL.PAYLOAD+packet.get_payload()[index:index+MAX_LINE_LENGTH]+"\r\n").encode("utf-8"))
         self.timeout = threading.Thread(target=self.timeout_send,args=(packet.number,),daemon=True)
@@ -110,7 +110,7 @@ class TCP_Handler:
             self.send_packet(self.current_sending_packet)
     def receive_ack(self,number):
         self.acknowledged = number
-        packet_size = MAX_LINE_LENGTH*(LINES_PER_PACKET-1)
+        packet_size = MAX_LINE_LENGTH*PAYLOAD_FRAMES_PER_PACKET
         index = (self.acknowledged-1)*packet_size # 1 indexed
         payload = self.text_to_send[index:index+packet_size]
         if payload:
