@@ -1,45 +1,12 @@
 import tkinter as tk
 
-from serial import Serial
-from serial.threaded import ReaderThread, Protocol, LineReader
 from layer4 import TCP_Handler
-
+from layer2 import Layer2, SerialReaderProtocolLine, ReaderThread
 import json
 
 from microbitsmodule import get_micro
 
 
-class SerialReaderProtocolRaw(Protocol):
-    tk_listener = None
-
-    def connection_made(self, transport):
-        """Called when reader thread is started"""
-        if self.tk_listener is None:
-            raise Exception("tk_listener must be set before connecting to the socket!")
-        print("Connected, ready to receive data...")
-
-    def data_received(self, data):
-        """Called with snippets received from the serial port"""
-        self.tk_listener.after(0, self.tk_listener.on_data, str(data))
-
-class SerialReaderProtocolLine(LineReader): #layers 1  and 2
-    tcp_connection = None
-    TERMINATOR = b'\r\n'
-
-    def connection_made(self, transport):
-        """Called when reader thread is started"""
-        if self.tcp_connection is None:
-            raise Exception("tk_listener must be set before connecting to the socket!")
-        super().connection_made(transport)
-        print("Connected, ready to receive data...")
-
-    def handle_line(self, line:str): # so this code is out of our control and line will always be a str
-        '''this is layer 2 where we receive frames (in this case its lines), 
-        we could apply a hamming code here, but in testing errors within frames seem fairly rare'''
-        line = line.strip()
-        #print(f"{self.current_packet_num=}")
-        '''here we are moving up to layer 4'''
-        self.tcp_connection.receive_frame(line)
 
 class MainFrame(tk.Frame):
     def __init__(self, *args, **kwargs):
@@ -91,10 +58,12 @@ if __name__ == '__main__':
     main_frame = MainFrame()
     # Initiate serial port
     serial_port = get_micro()
+    layer_2 = Layer2(serial_port,layer4=None) #this is hacky but it works
     layer_6 = ChatStream(main_frame)
     layer_4 = TCP_Handler(serial_port,layer_6)
+    layer_2.layer4 = layer_4
     # Set listener to our reader
-    SerialReaderProtocolLine.tcp_connection =  layer_4
+    SerialReaderProtocolLine.frame_handler =  layer_2
     sending_box = SendingBox(layer_4,main_frame,username)
     # Initiate ReaderThread
     reader = ReaderThread(serial_port, SerialReaderProtocolLine)

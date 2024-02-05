@@ -1,11 +1,12 @@
 import threading
 import time
 import hashlib
+from layer2 import Layer2
 
 PAYLOAD_FRAMES_PER_PACKET = 3
 MAX_LINE_LENGTH = 14
 
-SPACE_CHARACTER = "\u0091"
+
 class CONTROL:
     MESSAGE_END = "\u0004"
     HEADER = "\u0001"
@@ -54,19 +55,19 @@ class Packet:
         self.type = type
         self.checksum = ""
     def add_payload(self,payload:str):
-        self.payload += payload.replace(" ",SPACE_CHARACTER)
+        self.payload += payload
     @property
     def is_complete(self) ->bool:
         return self.get_checksum()==self.checksum
     def get_payload(self):
-        return self.payload.replace(SPACE_CHARACTER," ")
+        return self.payload
     def debug(self):
         return f"{self.type=}, {self.number=}, {self.payload=}"
     def get_checksum(self) :
         return hashlib.blake2b(self.payload.encode()).hexdigest()[:MAX_LINE_LENGTH]
 
 class TCP_Handler:
-    def __init__(self, sending_port,layer_6):
+    def __init__(self, sending_port:Layer2,layer_6):
         self.sending_port =sending_port
         self.layer_6= layer_6
         self.current_receiving_message = None
@@ -102,18 +103,18 @@ class TCP_Handler:
 
     def send_packet(self,packet:Packet):
         if packet.type =="ACK": # doesn't need a responce
-            self.sending_port.write((CONTROL.ACK+str(packet.number)+"\r\n").encode("utf-8"))
+            self.sending_port.write(CONTROL.ACK+str(packet.number))
             return
         elif packet.type =="SYN":
-            self.sending_port.write((CONTROL.SYN+str(packet.number)+"\r\n").encode("utf-8"))
+            self.sending_port.write(CONTROL.SYN+str(packet.number))
         elif packet.type =="END":
-            self.sending_port.write((CONTROL.MESSAGE_END+str(packet.number)+"\r\n").encode("utf-8"))
+            self.sending_port.write(CONTROL.MESSAGE_END+str(packet.number))
         elif packet.type =="payload":
-            self.sending_port.write((CONTROL.HEADER+str(packet.number)+"\r\n").encode("utf-8"))
+            self.sending_port.write(CONTROL.HEADER+str(packet.number))
             for i in range(PAYLOAD_FRAMES_PER_PACKET):
                 index = i*MAX_LINE_LENGTH
-                self.sending_port.write((CONTROL.PAYLOAD+packet.payload[index:index+MAX_LINE_LENGTH]+"\r\n").encode("utf-8")) # dont use get payload as we dont want spaces
-            self.sending_port.write((CONTROL.TRAILER+packet.get_checksum()+"\r\n").encode("utf-8"))
+                self.sending_port.write(CONTROL.PAYLOAD+packet.get_payload()[index:index+MAX_LINE_LENGTH])
+            self.sending_port.write(CONTROL.TRAILER+packet.get_checksum())
         self.timeout = threading.Thread(target=self.timeout_send,args=(packet.number,),daemon=True)
         self.timeout.start()
     def timeout_send(self,number):
