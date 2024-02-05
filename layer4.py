@@ -57,7 +57,7 @@ class Packet:
     def is_complete(self) ->bool:
         return self.get_checksum()==self.checksum
     def get_payload(self):
-        return self.payload(SPACE_CHARACTER," ")
+        return self.payload.replace(SPACE_CHARACTER," ")
     def debug(self):
         return f"{self.type=}, {self.number=}, {self.payload=}"
     def get_checksum(self) :
