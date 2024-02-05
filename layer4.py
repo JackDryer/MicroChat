@@ -87,6 +87,8 @@ class TCP_Handler:
                 self.current_receiving_message.next_packet(int(line[1:]))
             case CONTROL.PAYLOAD:
                 self.current_receiving_message.add_payload(line[1:])
+            case CONTROL.TRAILER:
+                self.current_receiving_message.add_trailer(line[1:])
             case CONTROL.MESSAGE_END:
                 self.send_packet(Packet(int(line[1:])+1,"ACK"))
                 self.layer_6.handle_message(self.current_receiving_message.get_message())
