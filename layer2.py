@@ -27,5 +27,4 @@ class Layer2:
         self.layer4.receive_frame(frame)
     def write(self,frame:str):
         frame = frame.replace(" ",SPACE_CHARACTER)
-        print(frame.encode("utf-8")+b"\r\n")
         self.serial.write(frame.encode("utf-8")+b"\r\n")
