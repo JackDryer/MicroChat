@@ -26,6 +26,8 @@ class Received_Message:
         self.current_packet = Packet(next_packet_number)
 
     def add_payload(self,payload):
+        if self.current_packet is None:
+            return # ignore it, it'll time out and re-send
         self.current_packet.add_payload(payload)
     def add_trailer(self,trailer):
         if self.current_packet is None:
