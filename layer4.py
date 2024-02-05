@@ -37,15 +37,6 @@ class Received_Message:
     def get_message(self):
         return "".join(self.packets)
 
-    def timeout(self):
-        time.sleep(0.5)
-        if not self.is_complete:
-            self.failed_packet_nums = set(range(1,self.num_packets_to_receive+1)).difference(self.successful_packet_nums)
-            print("Timed out!")
-            print("error receiving packets",self.failed_packet_nums)
-            print(f"{self.successful_packets=}")
-            self.handle_errors()
-
         
 class Packet:
     def __init__(self, number:int, type = "payload"):
@@ -69,17 +60,21 @@ class TCP_Handler:
         self.sending_port =sending_port
         self.layer_6= layer_6
         self.current_receiving_message = None
+        self.last_received_packet = None # stops duplicates 
+
     def receive_frame(self,line):
         if not line or line[0] not in CONTROL.VALID_MESSAGES:
             if self.current_receiving_message is not None:
                 self.current_receiving_message.add_failed_line()
             return
         if line[0] ==CONTROL.SYN:
-            if self.current_receiving_message: # 2 mesages at once, BAD!
+            if self.last_received_packet!= "SYN" and self.current_receiving_message: # 2 mesages at once, BAD!
                 raise Exception("Tried to handle 2 messages at once")
             self.current_receiving_message = Received_Message(self)
             self.send_packet(Packet(int(line[1:])+1,"ACK"))
-            Received_Message
+            self.last_received_packet = "SYN"
+        else:
+            self.last_received_packet = None
         match line[0]:
             case CONTROL.HEADER:
                 self.current_receiving_message.next_packet(int(line[1:]))

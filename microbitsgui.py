@@ -56,8 +56,8 @@ class ChatStream:
     def __init__(self,tk_listener) -> None:
         self.tk_listener = tk_listener
     def handle_message(self,message):
-        full_message = json.loads(message) #why operate on strings??, as lower levels kina needs it at the moment, im im not sure at this point how that code works ¯\_(ツ)_/¯
-        if full_message["type"] == 4: #pain text message, used to demmo why it's insecure
+        full_message = json.loads(message) 
+        if full_message["type"] == 4: #pain text message, used to demo why it's insecure
             # Execute our callback in tk
             self.tk_listener.after(0, self.tk_listener.on_data, f'(Plaintext){full_message["username"]} >{full_message["message"]}')
         else:
