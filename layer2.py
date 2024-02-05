@@ -22,7 +22,7 @@ class Layer2:
     def read(self,frame:str):
         '''this is layer 2 where we receive frames (in this case its lines), 
         we could apply a hamming code here, but in testing errors within frames seem fairly rare'''
-        line = line.strip()
+        frame = frame.strip()
         frame = frame.replace(SPACE_CHARACTER," ")
         self.layer4.receive_frame(frame)
     def write(self,frame:str):

@@ -60,7 +60,7 @@ if __name__ == '__main__':
     serial_port = get_micro()
     layer_2 = Layer2(serial_port,layer4=None) #this is hacky but it works
     layer_6 = ChatStream(main_frame)
-    layer_4 = TCP_Handler(serial_port,layer_6)
+    layer_4 = TCP_Handler(layer_2,layer_6)
     layer_2.layer4 = layer_4
     # Set listener to our reader
     SerialReaderProtocolLine.frame_handler =  layer_2
